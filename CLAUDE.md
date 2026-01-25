@@ -136,6 +136,21 @@ python3 scripts/planner_v4.py 10
 
 **On-route huts (27 total, extracted from PDF):** Petrohan, Trastena, Leskova, Vitinya, Kashana, Echo, Kozya Stena, Dermenka, Dobrila, Botev Shelter, Tazha, Mazalat, Partizanska Pesen, Uzana, Buzludzha, Gramadliva, Himik, Predela, Karaivanovo Shelter, Bukovets, Chumerna, Naboznikovo Shelter, Varbitsa, Hazim Shelter, Ralio Villa, Kozichino, Emona
 
+## Getting Started
+
+```bash
+# 1. Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 2. Install dependencies
+pip install flask
+
+# 3. Start web planner
+python3 app.py
+# Open http://localhost:5001
+```
+
 ## Usage
 
 ```bash
