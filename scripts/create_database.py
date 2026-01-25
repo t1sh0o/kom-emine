@@ -21,8 +21,29 @@ def create_db():
         description TEXT,
         lat REAL,
         lon REAL,
-        elevation_m INTEGER
+        elevation_m INTEGER,
+        technical INTEGER DEFAULT 0
     )''')
+
+    # Precomputed segment elevation gain/loss (from GPX track)
+    c.execute('''CREATE TABLE IF NOT EXISTS segment_elevations (
+        from_waypoint_id INTEGER,
+        to_waypoint_id INTEGER,
+        elevation_gain INTEGER,
+        elevation_loss INTEGER,
+        track_points INTEGER,
+        PRIMARY KEY (from_waypoint_id, to_waypoint_id)
+    )''')
+
+    # Simplified track points for elevation profile (~100m intervals)
+    c.execute('''CREATE TABLE IF NOT EXISTS track_profile (
+        id INTEGER PRIMARY KEY,
+        km REAL,
+        elevation INTEGER,
+        lat REAL,
+        lon REAL
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_track_km ON track_profile(km)')
 
     # Water/POI from GPX
     c.execute('''CREATE TABLE IF NOT EXISTS water_points (

@@ -34,8 +34,8 @@ def get_huts() -> List[Hut]:
     conn.close()
     return huts
 
-def get_stats(start: float, end: float) -> Tuple[float, int, int]:
-    """Return (hours, elevation_gain, water_count)."""
+def get_stats(start: float, end: float) -> Tuple[float, int, int, int]:
+    """Return (hours, elevation_gain, elevation_loss, water_count)."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -50,13 +50,32 @@ def get_stats(start: float, end: float) -> Tuple[float, int, int]:
             if len(p) == 2:
                 mins += int(p[0])*60 + int(p[1])
 
-    gain = 0
-    prev = None
-    for r in rows:
-        if r['elevation_m']:
-            if prev and r['elevation_m'] > prev:
-                gain += r['elevation_m'] - prev
-            prev = r['elevation_m']
+    # Try precomputed segment elevations first (from GPX track)
+    c.execute('''
+        SELECT SUM(se.elevation_gain), SUM(se.elevation_loss)
+        FROM segment_elevations se
+        JOIN route_waypoints rw1 ON se.from_waypoint_id = rw1.id
+        JOIN route_waypoints rw2 ON se.to_waypoint_id = rw2.id
+        WHERE rw1.total_km >= ? AND rw2.total_km <= ?
+    ''', (start, end))
+    row = c.fetchone()
+
+    if row[0] is not None:
+        gain, loss = int(row[0]), int(row[1])
+    else:
+        # Fallback to sparse waypoint calculation
+        gain = 0
+        loss = 0
+        prev = None
+        for r in rows:
+            if r['elevation_m']:
+                if prev:
+                    delta = r['elevation_m'] - prev
+                    if delta > 0:
+                        gain += delta
+                    else:
+                        loss += abs(delta)
+                prev = r['elevation_m']
 
     c.execute('''SELECT COUNT(*) FROM water_points WHERE type='water' AND status='ok'
         AND lon BETWEEN (SELECT MIN(lon) FROM route_waypoints WHERE total_km BETWEEN ? AND ?)
@@ -65,7 +84,7 @@ def get_stats(start: float, end: float) -> Tuple[float, int, int]:
     water = c.fetchone()[0]
 
     conn.close()
-    return mins/60, gain, water
+    return mins/60, gain, loss, water
 
 def terrain(km: float) -> Tuple[float, str]:
     for (lo, hi), (factor, name) in DIFFICULTY.items():
@@ -174,14 +193,14 @@ def plan(num_days: int, max_km: float = 60) -> List[dict]:
         start_hut = stops[start_idx]
         end_hut = stops[end_idx]
 
-        hrs, gain, water = get_stats(start_hut.km, end_hut.km)
+        hrs, gain, loss, water = get_stats(start_hut.km, end_hut.km)
         _, terr = terrain((start_hut.km + end_hut.km) / 2)
         dist = end_hut.km - start_hut.km
 
-        # Difficulty
-        if hrs > 12 or gain > 1500 or dist > 55:
+        # Difficulty (consider both gain and loss)
+        if hrs > 12 or gain > 1500 or loss > 2000 or dist > 55:
             diff = "HARD"
-        elif hrs > 8 or gain > 900 or dist > 40:
+        elif hrs > 8 or gain > 900 or loss > 1200 or dist > 40:
             diff = "moderate"
         else:
             diff = "easy"
@@ -199,6 +218,7 @@ def plan(num_days: int, max_km: float = 60) -> List[dict]:
             'dist': dist,
             'hrs': hrs,
             'gain': gain,
+            'loss': loss,
             'water': water,
             'diff': diff,
             'terrain': terr,
@@ -216,13 +236,14 @@ def show(stages: List[dict]):
     total_km = sum(s['dist'] for s in stages)
     total_hrs = sum(s['hrs'] for s in stages)
     total_gain = sum(s['gain'] for s in stages)
+    total_loss = sum(s['loss'] for s in stages)
 
-    print(f"Total: {total_km:.0f} km | {total_hrs:.0f} hrs | +{total_gain}m\n")
+    print(f"Total: {total_km:.0f} km | {total_hrs:.0f} hrs | +{total_gain}m / -{total_loss}m\n")
 
     for s in stages:
         icon = {'HARD': '🔴', 'moderate': '🟡', 'easy': '🟢'}[s['diff']]
         print(f"DAY {s['day']}: {s['start']} → {s['end']}")
-        print(f"  {icon} {s['dist']:.0f} km | {s['hrs']:.1f} hrs | +{s['gain']}m | {s['terrain']}")
+        print(f"  {icon} {s['dist']:.0f} km | {s['hrs']:.1f} hrs | +{s['gain']}m / -{s['loss']}m | {s['terrain']}")
         if s['lunch']:
             print(f"  🍽️  {', '.join(s['lunch'])}")
         if s['water'] < 3:

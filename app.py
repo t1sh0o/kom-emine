@@ -87,14 +87,17 @@ def api_segment():
     if end <= start:
         return jsonify({'error': 'end must be > start'}), 400
 
-    hours, elevation_gain, water_count = get_stats(start, end)
+    hours, elevation_gain, elevation_loss, water_count = get_stats(start, end)
     distance_km = end - start
     factor, terrain_name = terrain((start + end) / 2)
 
-    # Difficulty rating
-    if hours > 12 or elevation_gain > 1500 or distance_km > 55:
+    # Check for technical sections
+    technical = has_technical_section(start, end)
+
+    # Difficulty rating (consider both gain and loss)
+    if hours > 12 or elevation_gain > 1500 or elevation_loss > 2000 or distance_km > 55:
         difficulty = 'hard'
-    elif hours > 8 or elevation_gain > 900 or distance_km > 40:
+    elif hours > 8 or elevation_gain > 900 or elevation_loss > 1200 or distance_km > 40:
         difficulty = 'moderate'
     else:
         difficulty = 'easy'
@@ -105,10 +108,58 @@ def api_segment():
         'distance_km': round(distance_km, 1),
         'hours': round(hours, 1),
         'elevation_gain': elevation_gain,
+        'elevation_loss': elevation_loss,
         'water_count': water_count,
         'terrain': terrain_name,
         'terrain_factor': factor,
-        'difficulty': difficulty
+        'difficulty': difficulty,
+        'technical': technical
+    })
+
+
+def has_technical_section(start: float, end: float) -> int:
+    """Check if segment contains technical sections (0=none, 1=moderate, 2=difficult)."""
+    rows = query('''
+        SELECT MAX(technical) as tech FROM route_waypoints
+        WHERE total_km >= ? AND total_km <= ? AND technical > 0
+    ''', (start, end))
+    if rows and rows[0]['tech']:
+        return rows[0]['tech']
+    return 0
+
+
+@app.route('/api/elevation-profile')
+def api_elevation_profile():
+    """Return simplified track for elevation chart."""
+    rows = query('SELECT km, elevation FROM track_profile ORDER BY km')
+
+    if not rows:
+        # Fallback to sparse waypoint data if track not imported
+        rows = query('''
+            SELECT total_km as km, elevation_m as elevation
+            FROM route_waypoints
+            WHERE elevation_m IS NOT NULL
+            ORDER BY total_km
+        ''')
+
+    points = [{'km': round(r['km'], 2), 'ele': r['elevation']} for r in rows]
+
+    # Get waypoint markers for overlay
+    waypoints = query('''
+        SELECT total_km as km, description, technical
+        FROM route_waypoints
+        WHERE total_km IS NOT NULL
+        ORDER BY total_km
+    ''')
+    markers = [{
+        'km': round(w['km'], 2),
+        'name': w['description'][:30] if w['description'] else '',
+        'technical': w['technical'] or 0
+    } for w in waypoints]
+
+    return jsonify({
+        'points': points,
+        'waypoints': markers
     })
 
 if __name__ == '__main__':

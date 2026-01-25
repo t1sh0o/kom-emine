@@ -1,6 +1,8 @@
 // Kom-Emine Route Planner
 let allWaypoints = [];
 let selectedRoute = []; // Array of waypoint objects
+let elevationChart = null;
+let elevationData = null;
 
 const FILTERS = ['hut', 'shelter', 'village', 'town', 'resort', 'finish'];
 
@@ -22,6 +24,7 @@ async function init() {
     await updateSegmentStats();
     renderWaypoints();
     renderRoute();
+    await loadElevationProfile();
 }
 
 function loadRouteFromStorage() {
@@ -80,7 +83,7 @@ function renderWaypoints() {
         const tooltip = `${distFromPrev}km from ${prevName}`;
 
         return `
-            <tr class="${isSelected ? 'selected' : ''}" data-dist="${tooltip}">
+            <tr class="${isSelected ? 'selected' : ''}" data-dist="${tooltip}" data-km="${wp.km}">
                 <td>${wp.km.toFixed(1)}</td>
                 <td title="${wp.description}">${name}</td>
                 <td>${wp.elevation || '-'}</td>
@@ -89,7 +92,7 @@ function renderWaypoints() {
                     <button class="btn-add"
                             onclick="addToRoute(${wp.km})"
                             ${isSelected ? 'disabled' : ''}>
-                        ${isSelected ? '✓' : '+'}
+                        ${isSelected ? '&#10003;' : '+'}
                     </button>
                 </td>
             </tr>
@@ -151,13 +154,14 @@ function renderRoute() {
     routeDays.textContent = selectedRoute.length > 0 ? `(${selectedRoute.length} stops)` : '';
 
     if (selectedRoute.length === 0) {
-        routeTable.innerHTML = '<tr><td colspan="6" class="empty-state">Click + to add waypoints</td></tr>';
+        routeTable.innerHTML = '<tr><td colspan="7" class="empty-state">Click + to add waypoints</td></tr>';
         routeTotals.innerHTML = '';
         warningsEl.innerHTML = '';
+        updateElevationChartStops([]);
         return;
     }
 
-    let totalKm = 0, totalHrs = 0, totalGain = 0;
+    let totalKm = 0, totalHrs = 0, totalGain = 0, totalLoss = 0;
     const warnings = [];
 
     routeTable.innerHTML = selectedRoute.map((wp, i) => {
@@ -168,6 +172,7 @@ function renderRoute() {
         totalKm += seg.distance_km || 0;
         totalHrs += seg.hours || 0;
         totalGain += seg.elevation_gain || 0;
+        totalLoss += seg.elevation_loss || 0;
 
         // Check for warnings
         if (seg.distance_km > 60) {
@@ -179,17 +184,22 @@ function renderRoute() {
         if (seg.hours > 12) {
             warnings.push(`Day ${i + 1}: ${seg.hours}h exceeds 12h limit`);
         }
+        if (seg.technical === 2) {
+            warnings.push(`Day ${i + 1}: Very technical terrain`);
+        }
 
         const diffClass = seg.difficulty ? `diff-${seg.difficulty}` : '';
+        const techIcon = seg.technical === 2 ? ' !' : seg.technical === 1 ? ' *' : '';
 
         return `
-            <tr>
+            <tr data-km="${wp.km}" onclick="highlightOnChart(${wp.km})">
                 <td>${i + 1}</td>
-                <td title="${startName} → ${endName}">${startName.substring(0, 10)} → ${endName.substring(0, 10)}</td>
+                <td title="${startName} → ${endName}">${startName.substring(0, 10)} → ${endName.substring(0, 10)}${techIcon}</td>
                 <td>${seg.distance_km || '-'}</td>
                 <td class="${diffClass}">${seg.hours || '-'}</td>
                 <td>+${seg.elevation_gain || 0}</td>
-                <td><button class="btn-remove" onclick="removeFromRoute(${wp.km})">×</button></td>
+                <td>-${seg.elevation_loss || 0}</td>
+                <td><button class="btn-remove" onclick="event.stopPropagation(); removeFromRoute(${wp.km})">x</button></td>
             </tr>
         `;
     }).join('');
@@ -197,10 +207,231 @@ function renderRoute() {
     routeTotals.innerHTML = `
         <span class="total-item"><span class="total-label">Total: </span><span class="total-value">${totalKm.toFixed(1)} km</span></span>
         <span class="total-item"><span class="total-label">Time: </span><span class="total-value">${totalHrs.toFixed(1)} hrs</span></span>
-        <span class="total-item"><span class="total-label">Elevation: </span><span class="total-value">+${totalGain} m</span></span>
+        <span class="total-item"><span class="total-label">Elevation: </span><span class="total-value">+${totalGain}m / -${totalLoss}m</span></span>
     `;
 
     warningsEl.innerHTML = warnings.map(w => `<div class="warning-item">${w}</div>`).join('');
+
+    // Update chart with selected stops
+    const stopKms = [0, ...selectedRoute.map(wp => wp.km)];
+    updateElevationChartStops(stopKms);
+}
+
+// ============ Elevation Profile Chart ============
+
+async function loadElevationProfile() {
+    try {
+        const res = await fetch('/api/elevation-profile');
+        elevationData = await res.json();
+        initElevationChart();
+    } catch (e) {
+        console.error('Failed to load elevation profile:', e);
+    }
+}
+
+function initElevationChart() {
+    if (!elevationData || !elevationData.points.length) {
+        document.getElementById('elevation-panel').style.display = 'none';
+        return;
+    }
+
+    const ctx = document.getElementById('elevationChart').getContext('2d');
+    const points = elevationData.points;
+
+    // Prepare data - sample if too many points for performance
+    const maxPoints = 1000;
+    const step = Math.ceil(points.length / maxPoints);
+    const sampledPoints = points.filter((_, i) => i % step === 0);
+
+    const labels = sampledPoints.map(p => p.km.toFixed(1));
+    const data = sampledPoints.map(p => p.ele);
+
+    elevationChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Elevation (m)',
+                data: data,
+                fill: true,
+                backgroundColor: 'rgba(22, 163, 74, 0.18)',
+                borderColor: '#16a34a',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: (items) => `km ${items[0].label}`,
+                        label: (item) => `${item.raw}m`
+                    }
+                },
+                zoom: {
+                    pan: {
+                        enabled: true,
+                        mode: 'x'
+                    },
+                    zoom: {
+                        wheel: { enabled: true },
+                        pinch: { enabled: true },
+                        mode: 'x'
+                    }
+                },
+                annotation: {
+                    annotations: {}
+                }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: 'km', color: '#64748b' },
+                    ticks: { color: '#64748b', maxTicksLimit: 15 },
+                    grid: { color: '#e2e8f0' },
+                    min: 0,
+                    max: Math.ceil(points[points.length - 1].km)
+                },
+                y: {
+                    title: { display: true, text: 'm', color: '#64748b' },
+                    ticks: { color: '#64748b' },
+                    grid: { color: '#e2e8f0' },
+                    min: 0,
+                    max: 2500,
+                    suggestedMax: 2500
+                }
+            },
+            onClick: (e, elements) => {
+                if (elements.length > 0) {
+                    const km = parseFloat(labels[elements[0].index]);
+                    highlightWaypointNearKm(km);
+                }
+            }
+        }
+    });
+
+    // Initial render with current stops
+    const stopKms = [0, ...selectedRoute.map(wp => wp.km)];
+    updateElevationChartStops(stopKms);
+}
+
+function updateElevationChartStops(stopKms) {
+    if (!elevationChart) return;
+
+    // Create vertical line annotations for each stop
+    const annotations = {};
+    stopKms.forEach((km, i) => {
+        if (km > 0) {
+            annotations[`stop${i}`] = {
+                type: 'line',
+                xMin: km,
+                xMax: km,
+                borderColor: '#16a34a',
+                borderWidth: 2,
+                borderDash: [4, 4],
+                label: {
+                    display: true,
+                    content: `${i}`,
+                    position: 'start',
+                    backgroundColor: '#16a34a',
+                    color: '#ffffff',
+                    font: { size: 9, weight: 'bold' },
+                    padding: 3
+                }
+            };
+        }
+    });
+
+    // Add subtle alternating segments between stops
+    for (let i = 0; i < stopKms.length - 1; i++) {
+        const startKm = stopKms[i];
+        const endKm = stopKms[i + 1];
+        const isOdd = i % 2 === 1;
+        annotations[`segment${i}`] = {
+            type: 'box',
+            xMin: startKm,
+            xMax: endKm,
+            yMin: 0,
+            yMax: 2500,
+            backgroundColor: isOdd ? 'rgba(22, 163, 74, 0.06)' : 'transparent',
+            borderWidth: 0
+        };
+    }
+
+    // Update annotations
+    elevationChart.options.plugins.annotation = { annotations };
+    elevationChart.update();
+}
+
+function highlightOnChart(km) {
+    if (!elevationChart) return;
+
+    const chart = elevationChart;
+
+    // Get current annotations or create empty object
+    const currentAnnotations = chart.options.plugins.annotation?.annotations || {};
+
+    // Add highlight marker
+    currentAnnotations.highlight = {
+        type: 'line',
+        xMin: km,
+        xMax: km,
+        borderColor: '#15803d',
+        borderWidth: 2,
+        label: {
+            display: true,
+            content: `km ${km.toFixed(0)}`,
+            position: 'end',
+            backgroundColor: '#15803d',
+            color: '#ffffff',
+            font: { size: 10, weight: 'bold' },
+            padding: 4
+        }
+    };
+
+    chart.options.plugins.annotation = { annotations: currentAnnotations };
+    chart.update();
+
+    // Remove highlight after 2s
+    setTimeout(() => {
+        if (chart.options.plugins.annotation?.annotations?.highlight) {
+            delete chart.options.plugins.annotation.annotations.highlight;
+            chart.update();
+        }
+    }, 2000);
+}
+
+function highlightWaypointNearKm(km) {
+    // Find closest sleepable waypoint
+    const filtered = allWaypoints.filter(wp => wp.sleepable);
+    let closest = filtered[0];
+    let minDist = Math.abs(closest.km - km);
+
+    for (const wp of filtered) {
+        const dist = Math.abs(wp.km - km);
+        if (dist < minDist) {
+            minDist = dist;
+            closest = wp;
+        }
+    }
+
+    if (closest && minDist < 20) {
+        // Scroll waypoint table to show this waypoint
+        const row = document.querySelector(`#waypoints-table tr[data-km="${closest.km}"]`);
+        if (row) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.add('highlight');
+            setTimeout(() => row.classList.remove('highlight'), 2000);
+        }
+    }
 }
 
 // Start app

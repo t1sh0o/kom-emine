@@ -5,11 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kom-Emine Route Planner</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
 </head>
 <body>
     <header>
-        <h1>KOM-EMINE ROUTE PLANNER</h1>
-        <p class="subtitle">555 km | Kom Peak → Cape Emine | Bulgaria's E3 Trail</p>
+        <div class="logo">
+            <div class="logo-icon">
+                <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Mountain peaks -->
+                    <path d="M4 32 L12 16 L18 24 L26 8 L36 32 Z" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1"/>
+                    <!-- Trail path -->
+                    <path d="M6 30 Q12 22 18 26 Q24 18 34 28" stroke="#16a34a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                    <!-- Peak marker -->
+                    <circle cx="26" cy="8" r="3" fill="#16a34a"/>
+                </svg>
+            </div>
+            <div>
+                <h1>KOM-EMINE</h1>
+                <p class="subtitle">555 km | Kom Peak to Cape Emine | E3 Trail</p>
+            </div>
+        </div>
     </header>
 
     <div class="filters">
@@ -21,6 +38,10 @@
         <label><input type="checkbox" id="filter-resort" checked> Resorts</label>
         <label><input type="checkbox" id="filter-finish" checked> Finish</label>
     </div>
+
+    <section class="elevation-panel" id="elevation-panel">
+        <canvas id="elevationChart"></canvas>
+    </section>
 
     <main class="container">
         <section class="panel waypoints-panel">
@@ -52,14 +73,17 @@
                             <th>km</th>
                             <th>hrs</th>
                             <th>+m</th>
+                            <th>-m</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
                 </table>
             </div>
-            <div class="route-totals" id="route-totals"></div>
-            <button id="clear-btn" class="btn-clear">Clear Route</button>
+            <div class="route-footer">
+                <div class="route-totals" id="route-totals"></div>
+                <button id="clear-btn" class="btn-clear">Clear</button>
+            </div>
         </section>
     </main>
 
