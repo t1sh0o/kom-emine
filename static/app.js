@@ -3,6 +3,7 @@ let allWaypoints = [];
 let selectedRoute = []; // Array of waypoint objects
 let elevationChart = null;
 let elevationData = null;
+let segmentChart = null;
 
 const FILTERS = ['hut', 'shelter', 'village', 'town', 'resort', 'finish'];
 
@@ -25,6 +26,33 @@ async function init() {
     renderWaypoints();
     renderRoute();
     await loadElevationProfile();
+    restoreModalFromURL();
+}
+
+function restoreModalFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const day = params.get('modal');
+    const start = params.get('start');
+    const end = params.get('end');
+
+    if (day && start && end) {
+        const startKm = parseFloat(start);
+        const endKm = parseFloat(end);
+        const dayNum = parseInt(day);
+
+        // Find names from route
+        let startName = 'Start', endName = 'End';
+        if (dayNum === 1) {
+            startName = 'Kom Peak';
+        } else if (dayNum > 1 && selectedRoute[dayNum - 2]) {
+            startName = extractName(selectedRoute[dayNum - 2].description);
+        }
+        if (selectedRoute[dayNum - 1]) {
+            endName = extractName(selectedRoute[dayNum - 1].description);
+        }
+
+        openSegmentPreview(startKm, endKm, dayNum, startName, endName);
+    }
 }
 
 function loadRouteFromStorage() {
@@ -191,8 +219,9 @@ function renderRoute() {
         const diffClass = seg.difficulty ? `diff-${seg.difficulty}` : '';
         const techIcon = seg.technical === 2 ? ' !' : seg.technical === 1 ? ' *' : '';
 
+        const startKm = i === 0 ? 0 : selectedRoute[i - 1].km;
         return `
-            <tr data-km="${wp.km}" onclick="highlightOnChart(${wp.km})">
+            <tr data-km="${wp.km}" onclick="openSegmentPreview(${startKm}, ${wp.km}, ${i + 1}, '${startName.replace(/'/g, "\\'")}', '${endName.replace(/'/g, "\\'")}')">
                 <td>${i + 1}</td>
                 <td title="${startName} → ${endName}">${startName.substring(0, 10)} → ${endName.substring(0, 10)}${techIcon}</td>
                 <td>${seg.distance_km || '-'}</td>
@@ -433,6 +462,382 @@ function highlightWaypointNearKm(km) {
         }
     }
 }
+
+// ============ Segment Preview Modal ============
+
+async function openSegmentPreview(startKm, endKm, day, startName, endName) {
+    const modal = document.getElementById('segment-modal');
+    const title = document.getElementById('modal-title');
+    const stats = document.getElementById('modal-stats');
+    const poisEl = document.getElementById('modal-pois');
+
+    title.textContent = `Day ${day}: ${startName} → ${endName}`;
+    stats.innerHTML = '<span class="stat-item">Loading...</span>';
+    poisEl.innerHTML = '';
+
+    modal.hidden = false;
+
+    // Update URL with modal state
+    const url = new URL(window.location);
+    url.searchParams.set('modal', day);
+    url.searchParams.set('start', startKm);
+    url.searchParams.set('end', endKm);
+    history.replaceState(null, '', url);
+
+    try {
+        const res = await fetch(`/api/segment-preview?start=${startKm}&end=${endKm}`);
+        const data = await res.json();
+
+        // Render stats
+        stats.innerHTML = `
+            <span class="stat-item"><span class="stat-label">Distance:</span> <span class="stat-value">${data.distance_km} km</span></span>
+            <span class="stat-item"><span class="stat-label">Time:</span> <span class="stat-value">${data.hours} hrs</span></span>
+            <span class="stat-item"><span class="stat-label">Gain:</span> <span class="stat-value stat-gain">+${data.elevation_gain}m</span></span>
+            <span class="stat-item"><span class="stat-label">Loss:</span> <span class="stat-value stat-loss">-${data.elevation_loss}m</span></span>
+        `;
+
+        // Render chart with POI markers
+        createSegmentChart(data.profile, data.pois);
+
+        // Render segments and POIs
+        renderSegmentsAndPOIs(data.segments, data.pois);
+
+    } catch (e) {
+        console.error('Failed to load segment preview:', e);
+        stats.innerHTML = '<span class="stat-item">Failed to load</span>';
+    }
+}
+
+function createSegmentChart(profile, pois) {
+    const ctx = document.getElementById('segmentChart').getContext('2d');
+
+    // Destroy existing chart
+    if (segmentChart) {
+        segmentChart.destroy();
+    }
+
+    if (!profile || profile.length === 0) {
+        return;
+    }
+
+    // Sample if too many points
+    const maxPoints = 500;
+    const step = Math.ceil(profile.length / maxPoints);
+    const sampled = profile.filter((_, i) => i % step === 0);
+
+    const labels = sampled.map(p => p.km);
+    const data = sampled.map(p => p.ele);
+
+    // Build POI annotations
+    const annotations = {};
+    const allPois = [
+        ...(pois.huts || []).map(p => ({ ...p, type: 'hut', color: '#16a34a' })),
+        ...(pois.water || []).map(p => ({ ...p, type: 'water', color: '#3b82f6' })),
+        ...(pois.villages || []).map(p => ({ ...p, type: 'village', color: '#8b5cf6' })),
+        ...(pois.passes || []).map(p => ({ ...p, type: 'pass', color: '#f97316' })),
+        ...(pois.peaks || []).map(p => ({ ...p, type: 'peak', color: '#ef4444' }))
+    ];
+
+    allPois.forEach((poi, i) => {
+        annotations[`poi${i}`] = {
+            type: 'line',
+            xMin: poi.km,
+            xMax: poi.km,
+            borderColor: poi.color,
+            borderWidth: 2,
+            borderDash: poi.type === 'water' ? [3, 3] : [],
+            label: {
+                display: true,
+                content: poi.type === 'water' ? '💧' : (poi.type === 'hut' ? '🏠' : (poi.type === 'village' ? '🏘' : '⛰')),
+                position: 'start',
+                font: { size: 10 }
+            }
+        };
+    });
+
+    segmentChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Elevation',
+                data: data,
+                fill: true,
+                backgroundColor: 'rgba(22, 163, 74, 0.15)',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.2,
+                segment: {
+                    borderColor: ctx => {
+                        if (ctx.p0 && ctx.p1) {
+                            return ctx.p1.parsed.y > ctx.p0.parsed.y ? '#dc2626' : '#2563eb';
+                        }
+                        return '#16a34a';
+                    }
+                }
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: items => `km ${items[0].label.toFixed(1)}`,
+                        label: item => `${item.raw}m`
+                    }
+                },
+                annotation: { annotations }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    min: sampled[0].km,
+                    max: sampled[sampled.length - 1].km,
+                    title: { display: true, text: 'km', color: '#64748b' },
+                    ticks: { color: '#64748b', maxTicksLimit: 10 },
+                    grid: { color: '#e2e8f0' }
+                },
+                y: {
+                    title: { display: true, text: 'm', color: '#64748b' },
+                    ticks: { color: '#64748b' },
+                    grid: { color: '#e2e8f0' }
+                }
+            }
+        }
+    });
+}
+
+function renderSegmentsAndPOIs(segments, pois) {
+    const container = document.getElementById('modal-pois');
+
+    // Combine all POIs into one sorted list
+    const allPois = [
+        ...(pois.huts || []).map(p => ({ ...p, type: 'hut', icon: '🏠' })),
+        ...(pois.water || []).map(p => ({ ...p, type: 'water', icon: '💧' })),
+        ...(pois.villages || []).map(p => ({ ...p, type: 'village', icon: '🏘' })),
+        ...(pois.passes || []).map(p => ({ ...p, type: 'pass', icon: '⛰' })),
+        ...(pois.peaks || []).map(p => ({ ...p, type: 'peak', icon: '🏔' }))
+    ].sort((a, b) => a.km - b.km);
+
+    let html = '<div class="segment-details">';
+
+    // Segments table
+    if (segments && segments.length > 0) {
+        html += `
+            <div class="segments-section">
+                <h4>Elevation Segments</h4>
+                <table class="segments-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>km</th>
+                            <th>Dist</th>
+                            <th>+</th>
+                            <th>-</th>
+                            <th>Grade</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${segments.map(s => `
+                            <tr class="seg-${s.type}" onclick="highlightSegmentOnChart(${s.start_km}, ${s.end_km}, this)">
+                                <td class="${s.type === 'ascent' ? 'seg-ascent-icon' : 'seg-descent-icon'}">${s.type === 'ascent' ? '↗' : '↘'}</td>
+                                <td>${s.start_km}–${s.end_km}</td>
+                                <td>${s.distance} km</td>
+                                <td class="seg-ascent-val">+${s.ascent || 0}</td>
+                                <td class="seg-descent-val">-${s.descent || 0}</td>
+                                <td>${s.gradient}%</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    // POIs list
+    if (allPois.length > 0) {
+        html += `
+            <div class="pois-section">
+                <h4>Points of Interest</h4>
+                <table class="pois-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Name</th>
+                            <th>km</th>
+                            <th>Elev</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${allPois.map(p => `
+                            <tr class="poi-row poi-${p.type}" onclick="highlightPOIOnChart(${p.km}, this)">
+                                <td>${p.icon}</td>
+                                <td>
+                                    ${p.type === 'water' ? `<span class="water-status ${getWaterStatusClass(p.status)}"></span>` : ''}
+                                    ${p.name}
+                                </td>
+                                <td>${p.km}</td>
+                                <td>${p.elevation || '-'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    container.innerHTML = html || '<p style="color: var(--text-muted); padding: 1rem;">No data for this segment</p>';
+}
+
+function getWaterStatusClass(status) {
+    if (!status) return 'ok';
+    const s = status.toLowerCase();
+    if (s.includes('пресъхва') || s.includes('seasonal')) return 'seasonal';
+    if (s.includes('слаба') || s.includes('weak')) return 'weak';
+    if (s.includes('спряна') || s.includes('dry')) return 'dry';
+    return 'ok';
+}
+
+let currentHighlightedRow = null;
+
+function clearChartHighlights() {
+    if (!segmentChart) return;
+
+    // Clear row highlight
+    if (currentHighlightedRow) {
+        currentHighlightedRow.classList.remove('highlighted');
+        currentHighlightedRow = null;
+    }
+
+    // Clear chart annotations
+    if (segmentChart.options.plugins.annotation?.annotations) {
+        delete segmentChart.options.plugins.annotation.annotations.segmentHighlight;
+        delete segmentChart.options.plugins.annotation.annotations.poiHighlight;
+        segmentChart.update();
+    }
+}
+
+function highlightSegmentOnChart(startKm, endKm, clickedRow) {
+    if (!segmentChart) return;
+
+    // Clear previous highlights
+    clearChartHighlights();
+
+    // Highlight the clicked row
+    if (clickedRow) {
+        clickedRow.classList.add('highlighted');
+        currentHighlightedRow = clickedRow;
+    }
+
+    // Ensure annotation plugin exists
+    if (!segmentChart.options.plugins.annotation) {
+        segmentChart.options.plugins.annotation = { annotations: {} };
+    }
+    if (!segmentChart.options.plugins.annotation.annotations) {
+        segmentChart.options.plugins.annotation.annotations = {};
+    }
+
+    // Add highlight box directly to existing annotations
+    segmentChart.options.plugins.annotation.annotations.segmentHighlight = {
+        type: 'box',
+        xMin: startKm,
+        xMax: endKm,
+        backgroundColor: 'rgba(251, 191, 36, 0.4)',
+        borderColor: '#f59e0b',
+        borderWidth: 3
+    };
+
+    segmentChart.update();
+}
+
+function highlightPOIOnChart(km, clickedRow) {
+    if (!segmentChart) return;
+
+    // Clear previous highlights
+    clearChartHighlights();
+
+    // Highlight the clicked row
+    if (clickedRow) {
+        clickedRow.classList.add('highlighted');
+        currentHighlightedRow = clickedRow;
+    }
+
+    // Ensure annotation plugin exists
+    if (!segmentChart.options.plugins.annotation) {
+        segmentChart.options.plugins.annotation = { annotations: {} };
+    }
+    if (!segmentChart.options.plugins.annotation.annotations) {
+        segmentChart.options.plugins.annotation.annotations = {};
+    }
+
+    // Add highlight line directly to existing annotations
+    segmentChart.options.plugins.annotation.annotations.poiHighlight = {
+        type: 'line',
+        xMin: km,
+        xMax: km,
+        borderColor: '#f59e0b',
+        borderWidth: 4,
+        label: {
+            display: true,
+            content: `km ${km}`,
+            position: 'end',
+            backgroundColor: '#f59e0b',
+            color: '#fff',
+            font: { size: 11, weight: 'bold' },
+            padding: 4
+        }
+    };
+
+    segmentChart.update();
+}
+
+function closeSegmentModal() {
+    const modal = document.getElementById('segment-modal');
+    modal.hidden = true;
+    if (segmentChart) {
+        segmentChart.destroy();
+        segmentChart = null;
+    }
+
+    // Clear URL params
+    const url = new URL(window.location);
+    url.searchParams.delete('modal');
+    url.searchParams.delete('start');
+    url.searchParams.delete('end');
+    history.replaceState(null, '', url);
+}
+
+// Close modal on backdrop click or ESC, clear highlights on chart click
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('segment-modal');
+    const backdrop = modal.querySelector('.modal-backdrop');
+    const chartWrapper = document.querySelector('.segment-chart-wrapper');
+
+    backdrop.addEventListener('click', closeSegmentModal);
+
+    // Clear highlights when clicking on chart area
+    if (chartWrapper) {
+        chartWrapper.addEventListener('click', (e) => {
+            // Only clear if clicking directly on chart, not on a POI marker
+            if (e.target.tagName === 'CANVAS') {
+                clearChartHighlights();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.hidden) {
+            closeSegmentModal();
+        }
+    });
+});
 
 // Start app
 init();

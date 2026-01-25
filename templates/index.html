@@ -89,6 +89,22 @@
 
     <footer class="warnings" id="warnings"></footer>
 
+    <!-- Segment Preview Modal -->
+    <div id="segment-modal" class="modal" hidden>
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <header class="modal-header">
+                <h3 id="modal-title">Day X: Start → End</h3>
+                <button class="modal-close" onclick="closeSegmentModal()">&times;</button>
+            </header>
+            <div class="segment-stats" id="modal-stats"></div>
+            <div class="segment-chart-wrapper">
+                <canvas id="segmentChart"></canvas>
+            </div>
+            <div class="poi-lists" id="modal-pois"></div>
+        </div>
+    </div>
+
     <script src="/static/app.js"></script>
 </body>
 </html>
