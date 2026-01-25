@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kom-Emine Route Planner</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>KOM-EMINE ROUTE PLANNER</h1>
+        <p class="subtitle">555 km | Kom Peak → Cape Emine | Bulgaria's E3 Trail</p>
+    </header>
+
+    <div class="filters">
+        <span class="filter-label">Filter:</span>
+        <label><input type="checkbox" id="filter-hut" checked> Huts</label>
+        <label><input type="checkbox" id="filter-shelter" checked> Shelters</label>
+        <label><input type="checkbox" id="filter-village" checked> Villages</label>
+        <label><input type="checkbox" id="filter-town" checked> Towns</label>
+        <label><input type="checkbox" id="filter-resort" checked> Resorts</label>
+        <label><input type="checkbox" id="filter-finish" checked> Finish</label>
+    </div>
+
+    <main class="container">
+        <section class="panel waypoints-panel">
+            <h2>Waypoints <span id="waypoint-count"></span></h2>
+            <div class="table-wrapper">
+                <table id="waypoints-table">
+                    <thead>
+                        <tr>
+                            <th>km</th>
+                            <th>Name</th>
+                            <th>Elev</th>
+                            <th>Type</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel route-panel">
+            <h2>Selected Route <span id="route-days"></span></h2>
+            <div class="table-wrapper">
+                <table id="route-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Segment</th>
+                            <th>km</th>
+                            <th>hrs</th>
+                            <th>+m</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="route-totals" id="route-totals"></div>
+            <button id="clear-btn" class="btn-clear">Clear Route</button>
+        </section>
+    </main>
+
+    <footer class="warnings" id="warnings"></footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
