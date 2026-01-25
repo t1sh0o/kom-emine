@@ -146,10 +146,20 @@ source .venv/bin/activate
 # 2. Install dependencies
 pip install flask
 
-# 3. Start web planner
+# 3. Rebuild database (optional, already included)
+python3 scripts/create_database.py
+
+# 4. Start web planner
 python3 app.py
-# Open http://localhost:5001
+# Open http://localhost:5001 (or 5000 if available)
 ```
+
+### Web Planner Features
+- Filter waypoints by type (huts, shelters, villages, towns)
+- Click + to add stops, auto-sorted by km
+- Segment stats: distance, hours, elevation, water sources
+- Hover rows to see distance from previous stop
+- Route persists in localStorage
 
 ## Usage
 
