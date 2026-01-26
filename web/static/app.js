@@ -308,7 +308,7 @@ function initElevationChart() {
                         mode: 'x'
                     },
                     zoom: {
-                        wheel: { enabled: true },
+                        wheel: { enabled: false },
                         pinch: { enabled: true },
                         mode: 'x'
                     }
