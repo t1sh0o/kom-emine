@@ -12,7 +12,7 @@ const api = (() => {
     // === Data Loading ===
 
     async function loadData(name) {
-        const res = await fetch(`static/data/${name}.json`);
+        const res = await fetch(`data/${name}.json`);
         return res.json();
     }
 
