@@ -462,7 +462,7 @@ tr.highlight {
 /* ============ Share FAB ============ */
 .share-fab {
     position: fixed;
-    bottom: 1rem;
+    bottom: 5rem;
     right: 1rem;
     padding: 0.75rem 1.25rem;
     background: var(--green-accent);
@@ -1030,7 +1030,7 @@ html {
 
     /* Share FAB - position above warnings footer */
     .share-fab {
-        bottom: 3.5rem;
+        bottom: 4rem;
     }
 
     /* Modal on mobile */
