@@ -110,18 +110,12 @@ function renderWaypoints() {
         const tooltip = `${distFromPrev}km from ${prevName}`;
 
         return `
-            <tr class="${isSelected ? 'selected' : ''}" data-dist="${tooltip}" data-km="${wp.km}">
+            <tr class="${isSelected ? 'selected' : ''}" data-dist="${tooltip}" data-km="${wp.km}"
+                onclick="${isSelected ? `removeFromRoute(${wp.km})` : `addToRoute(${wp.km})`}">
                 <td>${wp.km.toFixed(1)}</td>
                 <td title="${wp.description}">${name}</td>
                 <td>${wp.elevation || '-'}</td>
                 <td><span class="badge badge-${wp.sleepable}">${wp.sleepable}</span></td>
-                <td>
-                    <button class="btn-add"
-                            onclick="addToRoute(${wp.km})"
-                            ${isSelected ? 'disabled' : ''}>
-                        ${isSelected ? '&#10003;' : '+'}
-                    </button>
-                </td>
             </tr>
         `;
     }).join('');

@@ -254,8 +254,9 @@ tr.highlight {
     50% { background: rgba(34, 197, 94, 0.3); }
 }
 
-/* Clickable route rows */
-#route-table tbody tr {
+/* Clickable rows */
+#route-table tbody tr,
+#waypoints-table tbody tr {
     cursor: pointer;
 }
 
