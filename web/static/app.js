@@ -4,6 +4,7 @@ let selectedRoute = []; // Array of waypoint objects
 let elevationChart = null;
 let elevationData = null;
 let segmentChart = null;
+let isRouteDrawerOpen = false;
 
 const FILTERS = ['hut', 'shelter', 'village', 'town', 'resort', 'finish'];
 
@@ -63,6 +64,73 @@ function loadRouteFromStorage() {
     }
 }
 
+// ============ Mobile Edge Tabs ============
+
+function showWaypoints() {
+    const container = document.querySelector('.drawer-container');
+    isRouteDrawerOpen = false;
+    container.classList.remove('route-open');
+}
+
+function showRoute() {
+    const container = document.querySelector('.drawer-container');
+    isRouteDrawerOpen = true;
+    container.classList.add('route-open');
+}
+
+function updateEdgeTabCount() {
+    const countEl = document.getElementById('edge-tab-count');
+    if (countEl) {
+        countEl.textContent = selectedRoute.length > 0 ? selectedRoute.length : '';
+    }
+}
+
+function bounceRouteTab() {
+    const tab = document.getElementById('edge-tab-route');
+    if (tab && !isRouteDrawerOpen) {
+        tab.classList.remove('bounce');
+        // Force reflow to restart animation
+        void tab.offsetWidth;
+        tab.classList.add('bounce');
+    }
+}
+
+function flyDistanceBadgeFromRect(startRect, distanceKm) {
+    const tab = document.getElementById('edge-tab-route');
+    if (!tab || isRouteDrawerOpen) {
+        bounceRouteTab();
+        return;
+    }
+
+    const tabRect = tab.getBoundingClientRect();
+
+    // Create flying badge
+    const badge = document.createElement('div');
+    badge.className = 'flying-badge';
+    badge.textContent = `+${distanceKm.toFixed(1)} km`;
+    document.body.appendChild(badge);
+
+    // Position at start (center of clicked row)
+    badge.style.left = `${startRect.left + startRect.width / 2}px`;
+    badge.style.top = `${startRect.top + startRect.height / 2}px`;
+    badge.style.transform = 'translate(-50%, -50%) scale(1)';
+    badge.style.opacity = '1';
+
+    // Force reflow
+    void badge.offsetWidth;
+
+    // Animate to tab
+    badge.style.left = `${tabRect.left + tabRect.width / 2}px`;
+    badge.style.top = `${tabRect.top + tabRect.height / 2}px`;
+    badge.classList.add('fly');
+
+    // Clean up and bounce
+    setTimeout(() => {
+        badge.remove();
+        bounceRouteTab();
+    }, 2000);
+}
+
 function saveRouteToStorage() {
     const kms = selectedRoute.map(wp => wp.km);
     localStorage.setItem('kom-emine-route', JSON.stringify(kms));
@@ -110,8 +178,8 @@ function renderWaypoints() {
         const tooltip = `${distFromPrev}km from ${prevName}`;
 
         return `
-            <tr class="${isSelected ? 'selected' : ''}" data-dist="${tooltip}" data-km="${wp.km}"
-                onclick="${isSelected ? `removeFromRoute(${wp.km})` : `addToRoute(${wp.km})`}">
+            <tr class="${isSelected ? 'selected' : ''}" data-dist="${tooltip}" data-km="${wp.km}" data-dist-km="${distFromPrev}"
+                onclick="${isSelected ? `removeFromRoute(${wp.km})` : `addToRoute(${wp.km}, this)`}">
                 <td>${wp.km.toFixed(1)}</td>
                 <td title="${wp.description}">${name}</td>
                 <td>${wp.elevation || '-'}</td>
@@ -130,9 +198,20 @@ function extractName(description) {
     return description.substring(0, 25);
 }
 
-async function addToRoute(km) {
+async function addToRoute(km, rowEl) {
     const wp = allWaypoints.find(w => w.km === km);
     if (!wp || selectedRoute.some(s => s.km === km)) return;
+
+    // Calculate distance from previous stop before adding
+    const prevStops = selectedRoute.filter(s => s.km < wp.km);
+    const prevKm = prevStops.length > 0 ? prevStops[prevStops.length - 1].km : 0;
+    const distFromPrev = wp.km - prevKm;
+
+    // Capture row position before re-render
+    let rowRect = null;
+    if (rowEl && window.innerWidth <= 768) {
+        rowRect = rowEl.getBoundingClientRect();
+    }
 
     selectedRoute.push(wp);
     selectedRoute.sort((a, b) => a.km - b.km);
@@ -141,6 +220,13 @@ async function addToRoute(km) {
     await updateSegmentStats();
     renderWaypoints();
     renderRoute();
+
+    // Fly badge animation (only on mobile when tab is visible)
+    if (rowRect) {
+        flyDistanceBadgeFromRect(rowRect, distFromPrev);
+    } else {
+        bounceRouteTab();
+    }
 }
 
 function removeFromRoute(km) {
@@ -212,14 +298,16 @@ function renderRoute() {
         const techIcon = seg.technical === 2 ? ' !' : seg.technical === 1 ? ' *' : '';
 
         const startKm = i === 0 ? 0 : selectedRoute[i - 1].km;
+        const combinedStats = `${seg.distance_km || '-'}km ${seg.hours || '-'}h`;
         return `
             <tr data-km="${wp.km}" onclick="openSegmentPreview(${startKm}, ${wp.km}, ${i + 1}, '${startName.replace(/'/g, "\\'")}', '${endName.replace(/'/g, "\\'")}')">
                 <td>${i + 1}</td>
                 <td title="${startName} → ${endName}">${startName.substring(0, 10)} → ${endName.substring(0, 10)}${techIcon}</td>
-                <td>${seg.distance_km || '-'}</td>
-                <td class="${diffClass}">${seg.hours || '-'}</td>
-                <td>+${seg.elevation_gain || 0}</td>
-                <td>-${seg.elevation_loss || 0}</td>
+                <td class="desktop-only">${seg.distance_km || '-'}</td>
+                <td class="desktop-only ${diffClass}">${seg.hours || '-'}</td>
+                <td class="desktop-only">+${seg.elevation_gain || 0}</td>
+                <td class="desktop-only">-${seg.elevation_loss || 0}</td>
+                <td class="mobile-stats">${combinedStats}</td>
                 <td><button class="btn-remove" onclick="event.stopPropagation(); removeFromRoute(${wp.km})">x</button></td>
             </tr>
         `;
@@ -236,6 +324,9 @@ function renderRoute() {
     // Update chart with selected stops
     const stopKms = [0, ...selectedRoute.map(wp => wp.km)];
     updateElevationChartStops(stopKms);
+
+    // Update mobile edge tab count
+    updateEdgeTabCount();
 }
 
 // ============ Elevation Profile Chart ============

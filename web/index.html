@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Kom-Emine Route Planner</title>
     <link rel="stylesheet" href="static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -29,22 +29,21 @@
         </div>
     </header>
 
-    <div class="filters">
-        <span class="filter-label">Filter:</span>
-        <label><input type="checkbox" id="filter-hut" checked> Huts</label>
-        <label><input type="checkbox" id="filter-shelter" checked> Shelters</label>
-        <label><input type="checkbox" id="filter-village" checked> Villages</label>
-        <label><input type="checkbox" id="filter-town" checked> Towns</label>
-        <label><input type="checkbox" id="filter-resort" checked> Resorts</label>
-        <label><input type="checkbox" id="filter-finish" checked> Finish</label>
-    </div>
-
     <section class="elevation-panel" id="elevation-panel">
         <canvas id="elevationChart"></canvas>
     </section>
 
-    <main class="container">
-        <section class="panel waypoints-panel">
+    <main class="container drawer-container">
+        <section class="panel waypoints-panel" data-drawer="waypoints">
+            <div class="filters">
+                <span class="filter-label">Filter:</span>
+                <label><input type="checkbox" id="filter-hut" checked> Huts</label>
+                <label><input type="checkbox" id="filter-shelter" checked> Shelters</label>
+                <label><input type="checkbox" id="filter-village" checked> Villages</label>
+                <label><input type="checkbox" id="filter-town" checked> Towns</label>
+                <label><input type="checkbox" id="filter-resort" checked> Resorts</label>
+                <label><input type="checkbox" id="filter-finish" checked> Finish</label>
+            </div>
             <h2>Waypoints <span id="waypoint-count"></span></h2>
             <div class="table-wrapper">
                 <table id="waypoints-table">
@@ -61,7 +60,7 @@
             </div>
         </section>
 
-        <section class="panel route-panel">
+        <section class="panel route-panel" data-drawer="route">
             <h2>Selected Route <span id="route-days"></span></h2>
             <div class="table-wrapper">
                 <table id="route-table">
@@ -69,10 +68,11 @@
                         <tr>
                             <th>#</th>
                             <th>Segment</th>
-                            <th>km</th>
-                            <th>hrs</th>
-                            <th>+m</th>
-                            <th>-m</th>
+                            <th class="desktop-only">km</th>
+                            <th class="desktop-only">hrs</th>
+                            <th class="desktop-only">+m</th>
+                            <th class="desktop-only">-m</th>
+                            <th class="mobile-stats">Stats</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -85,6 +85,15 @@
             </div>
         </section>
     </main>
+
+    <!-- Mobile edge tabs -->
+    <div class="edge-tab edge-tab-left" id="edge-tab-waypoints" onclick="showWaypoints()">
+        <span class="edge-tab-text">Waypoints</span>
+    </div>
+    <div class="edge-tab edge-tab-right" id="edge-tab-route" onclick="showRoute()">
+        <span class="edge-tab-text">Itinerary</span>
+        <span class="edge-tab-count" id="edge-tab-count"></span>
+    </div>
 
     <footer class="warnings" id="warnings"></footer>
 
