@@ -97,17 +97,26 @@ huts (49 rows)             - working huts with phones
 itinerary_21day (21 rows)  - traditional schedule
 ```
 
-## Scripts
+## Project Structure
 
 ```
-scripts/
-├── parse_gpx.py       # GPX → CSV
-├── create_database.py # Build SQLite from all sources
-├── query.py           # Example queries
-├── planner.py         # v1 - basic greedy planner
-├── planner_v2.py      # v2 - backwards planning
-├── planner_v3.py      # v3 - greedy forward
-└── planner_v4.py      # v4 - DP with constraint relaxation (RECOMMENDED)
+kom-emine/
+├── data/                  # SQLite + CSVs
+├── scripts/               # Python tools
+│   ├── build.sh           # Rebuild DB + export JSON
+│   ├── create_database.py # Build SQLite
+│   ├── export_json.py     # Export to web/data/
+│   ├── parse_gpx.py       # GPX → CSV
+│   ├── query.py           # Example queries
+│   └── planner_v4.py      # DP trip planner (RECOMMENDED)
+├── web/                   # Static frontend (Cloudflare Pages)
+│   ├── index.html
+│   ├── static/
+│   │   ├── app.js         # Main app logic
+│   │   ├── api.js         # Client-side data API
+│   │   └── style.css
+│   └── data/              # JSON exports (generated)
+└── tui/                   # Rust TUI (separate)
 ```
 
 ## Trip Planner
@@ -153,12 +162,20 @@ python3 -m http.server -d web 8000
 
 ### Web Planner Features
 - Filter waypoints by type (huts, shelters, villages, towns)
-- Click + to add stops, auto-sorted by km
-- Segment stats: distance, hours, elevation, water sources
-- Hover rows to see distance from previous stop
+- Click row to add/remove stops (auto-sorted by km)
+- Elevation profile chart with day markers (pan enabled, no scroll zoom)
+- Click day row → segment preview modal with:
+  - Detailed elevation chart (ascent=red, descent=blue)
+  - Elevation segments table (clickable highlights)
+  - POIs: huts, water sources, villages, passes, peaks
+- Hover waypoint rows → tooltip shows distance from previous stop
 - Route persists in localStorage
 
-### Deployment (Cloudflare Pages)
+### Deployment
+
+**Live**: https://kom-emine.pages.dev
+
+**Cloudflare Pages** (auto-deploy on push):
 - Build command: (empty - static site)
 - Build output directory: `web`
 - Root directory: `/`
