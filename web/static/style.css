@@ -459,6 +459,39 @@ tr.highlight {
     font-style: normal;
 }
 
+/* ============ Share FAB ============ */
+.share-fab {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--green-accent);
+    border: none;
+    border-radius: var(--radius);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    z-index: 100;
+    display: none;
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.35);
+    transition: all 0.2s ease;
+}
+
+.share-fab:hover {
+    background: var(--green-muted);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(22, 163, 74, 0.4);
+}
+
+.share-fab.visible {
+    display: block;
+}
+
+.share-fab.copied {
+    background: #0f172a;
+}
+
 /* Distance tooltip */
 tr[data-dist] {
     position: relative;
@@ -993,6 +1026,11 @@ html {
     tr[data-dist]:hover::after {
         top: auto;
         bottom: -2rem;
+    }
+
+    /* Share FAB - position above warnings footer */
+    .share-fab {
+        bottom: 3.5rem;
     }
 
     /* Modal on mobile */

@@ -20,12 +20,24 @@ const clearBtn = document.getElementById('clear-btn');
 // Initialize
 async function init() {
     await loadWaypoints();
-    loadRouteFromStorage();
+
+    // URL takes priority over localStorage
+    const urlKms = decodeRouteFromURL();
+    if (urlKms && urlKms.length > 0) {
+        selectedRoute = urlKms
+            .map(km => allWaypoints.find(w => w.km === km))
+            .filter(Boolean);
+        saveRouteToStorage(); // Sync to localStorage
+    } else {
+        loadRouteFromStorage();
+    }
+
     setupFilters();
     clearBtn.addEventListener('click', clearRoute);
     await updateSegmentStats();
     renderWaypoints();
     renderRoute();
+    updateShareButton();
     await loadElevationProfile();
     restoreModalFromURL();
 }
@@ -134,6 +146,62 @@ function flyDistanceBadgeFromRect(startRect, distanceKm) {
 function saveRouteToStorage() {
     const kms = selectedRoute.map(wp => wp.km);
     localStorage.setItem('kom-emine-route', JSON.stringify(kms));
+    encodeRouteToURL();
+}
+
+// ============ URL Route Sharing ============
+
+function encodeRouteToURL() {
+    const url = new URL(window.location);
+    if (selectedRoute.length === 0) {
+        url.searchParams.delete('route');
+    } else {
+        const kms = selectedRoute.map(wp => wp.km).join(',');
+        url.searchParams.set('route', kms);
+    }
+    history.replaceState(null, '', url);
+    updateShareButton();
+}
+
+function decodeRouteFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const routeParam = params.get('route');
+    if (!routeParam) return null;
+    return routeParam.split(',').map(Number).filter(km => !isNaN(km));
+}
+
+function updateShareButton() {
+    const btn = document.getElementById('share-btn');
+    if (btn) {
+        btn.classList.toggle('visible', selectedRoute.length > 0);
+    }
+}
+
+async function copyRouteURL() {
+    const btn = document.getElementById('share-btn');
+    try {
+        await navigator.clipboard.writeText(window.location.href);
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.textContent = 'Share';
+            btn.classList.remove('copied');
+        }, 2000);
+    } catch (e) {
+        // Fallback for older browsers
+        const input = document.createElement('input');
+        input.value = window.location.href;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.textContent = 'Share';
+            btn.classList.remove('copied');
+        }, 2000);
+    }
 }
 
 async function loadWaypoints() {
