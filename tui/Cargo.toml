@@ -1,0 +1,17 @@
+[package]
+name = "kom-emine-tui"
+version = "0.1.0"
+edition = "2024"
+description = "Kom-Emine hike route planner - Terminal UI"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+rusqlite = { version = "0.32", features = ["bundled"] }
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dirs = "6.0"
+
+[dev-dependencies]
+tempfile = "3.14"
