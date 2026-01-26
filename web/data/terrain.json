@@ -1,0 +1,1 @@
+[{"startKm":0,"endKm":105,"factor":1.0,"name":"Western"},{"startKm":105,"endKm":175,"factor":1.3,"name":"Central-alpine"},{"startKm":175,"endKm":245,"factor":1.4,"name":"Botev area"},{"startKm":245,"endKm":330,"factor":1.1,"name":"Central East"},{"startKm":330,"endKm":560,"factor":1.0,"name":"Eastern/Coast"}]

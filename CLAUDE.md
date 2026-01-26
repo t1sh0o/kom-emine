@@ -143,15 +143,12 @@ python3 scripts/planner_v4.py 10
 python3 -m venv .venv
 source .venv/bin/activate
 
-# 2. Install dependencies
-pip install flask
+# 2. Rebuild database and export JSON
+./scripts/build.sh
 
-# 3. Rebuild database (optional, already included)
-python3 scripts/create_database.py
-
-# 4. Start web planner
-python3 app.py
-# Open http://localhost:5001 (or 5000 if available)
+# 3. Start local web server
+python3 -m http.server -d web 8000
+# Open http://localhost:8000
 ```
 
 ### Web Planner Features
@@ -160,6 +157,11 @@ python3 app.py
 - Segment stats: distance, hours, elevation, water sources
 - Hover rows to see distance from previous stop
 - Route persists in localStorage
+
+### Deployment (Cloudflare Pages)
+- Build command: (empty - static site)
+- Build output directory: `web`
+- Root directory: `/`
 
 ## Usage
 

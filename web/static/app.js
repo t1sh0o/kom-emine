@@ -69,8 +69,7 @@ function saveRouteToStorage() {
 }
 
 async function loadWaypoints() {
-    const res = await fetch('/api/waypoints');
-    allWaypoints = await res.json();
+    allWaypoints = await api.getWaypoints();
 }
 
 function setupFilters() {
@@ -172,8 +171,7 @@ async function updateSegmentStats() {
         const end = selectedRoute[i].km;
 
         if (end > start) {
-            const res = await fetch(`/api/segment?start=${start}&end=${end}`);
-            selectedRoute[i].segment = await res.json();
+            selectedRoute[i].segment = await api.getSegmentStats(start, end);
         }
     }
 }
@@ -250,8 +248,7 @@ function renderRoute() {
 
 async function loadElevationProfile() {
     try {
-        const res = await fetch('/api/elevation-profile');
-        elevationData = await res.json();
+        elevationData = await api.getElevationProfile();
         initElevationChart();
     } catch (e) {
         console.error('Failed to load elevation profile:', e);
@@ -485,8 +482,7 @@ async function openSegmentPreview(startKm, endKm, day, startName, endName) {
     history.replaceState(null, '', url);
 
     try {
-        const res = await fetch(`/api/segment-preview?start=${startKm}&end=${endKm}`);
-        const data = await res.json();
+        const data = await api.getSegmentPreview(startKm, endKm);
 
         // Render stats
         stats.innerHTML = `
