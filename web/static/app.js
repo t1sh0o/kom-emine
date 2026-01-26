@@ -366,7 +366,7 @@ function renderRoute() {
         const techIcon = seg.technical === 2 ? ' !' : seg.technical === 1 ? ' *' : '';
 
         const startKm = i === 0 ? 0 : selectedRoute[i - 1].km;
-        const combinedStats = `${seg.distance_km || '-'}km +${seg.elevation_gain || 0} -${seg.elevation_loss || 0}`;
+        const combinedStats = `${seg.distance_km || '-'}k/+${seg.elevation_gain || 0}/-${seg.elevation_loss || 0}`;
         return `
             <tr data-km="${wp.km}" onclick="openSegmentPreview(${startKm}, ${wp.km}, ${i + 1}, '${startName.replace(/'/g, "\\'")}', '${endName.replace(/'/g, "\\'")}')">
                 <td>${i + 1}</td>
